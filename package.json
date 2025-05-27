@@ -2,7 +2,9 @@
   "name": "opa-rego-test-action",
   "scripts": {
     "build": "npx ncc build src/index.ts -o dist --source-map",
-    "test": "npx jest"
+    "test": "npx jest",
+    "local": "npx ts-node src/index.ts",
+    "local:resultProcessing": "npx ts-node ./src/testResultProcessing.ts"
   },
   "author": "Masterpoint",
   "license": "MIT",
@@ -15,6 +17,7 @@
   },
   "dependencies": {
     "@actions/core": "^1.10.1",
+    "@actions/exec": "^1.1.1",
     "@vercel/ncc": "^0.38.1"
   },
   "jest": {
@@ -30,6 +33,10 @@
     ],
     "setupFiles": [
       "./.jest/setupTests.ts"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/__tests__/mockResults.ts"
     ]
   }
 }

@@ -31,6 +31,7 @@ It's super easy to get started and use this GitHub Action to test your OPA Rego 
 - name: Run OPA Rego Tests
   uses: masterpointio/github-action-opa-rego-test@main
   with:
+    path: ./examples
     report_untested_files: true # Flag to check & report Rego files that does NOT have corresponding test files. Optional, defaults to false.
 ```
 
@@ -61,7 +62,7 @@ jobs:
       - name: Run OPA Rego Tests
         uses: masterpointio/github-action-opa-rego-test@main
         with:
-          path: "./config/spacelift-policies" # Path of the directory where the OPA Rego policies are stored. Optional, defaults to `.` which is the root directory.
+          path: "./config/spacelift-policies" # Path of the directory where the OPA Rego policies are stored.
           report_untested_files: true # Flag to check & report Rego files without corresponding test files. Optional, defaults to false.
 ```
 
@@ -77,17 +78,19 @@ In the example below, all `_test.rego` files' location are valid and will be exe
 
 ### Inputs
 
-| Input                     | Description                                                                                     | Required | Default                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------- | -------- | --------------------------------- |
-| `path`                    | Path to the directory containing OPA Rego files to test                                         | No       | `.` (root directory)              |
-| `test_file_postfix`       | Postfix of the test files to run (e.g. notification.rego <> notification_test.rego)             | No       | `_test`                           |
-| `write_pr_comment`        | Flag to write a user-friendly PR comment with test results                                      | No       | `true`                            |
-| `pr_comment_title`        | Title of the PR comment for test results                                                        | No       | `🧪 OPA Rego Policy Test Results` |
-| `pr_comment_mode`         | Mode that will be used to update comment. Options of upsert (update in place) or recreate.      | No       | `upsert`                          |
-| `run_coverage_report`     | Flag to run OPA coverage tests and include in PR comment                                        | No       | `true`                            |
-| `report_untested_files`   | Check & report Rego files without corresponding test files                                      | No       | `false`                           |
-| `opa_version`             | Version of the OPA CLI to use.                                                                  | No       | `0.67.1`                          |
-| `indicate_source_message` | Flag to comment the origins watermark (this repository) of the GitHub Action in the PR comment. | No       | `true`                            |
+| Input                     | Description                                                                                                                                                                                                           | Required | Default                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------------------------------- |
+| `path`                    | Path to the directory containing OPA Rego files to test                                                                                                                                                               | Yes      | REQUIRED                          |
+| `test_mode`               | Whether to test the Rego by an entire directory (including entire package, e.g. `opa test ./`) or by individual files (e.g. `opa test a_test.rego a.rego`). Options of `directory` or `file`. Default is `directory`. | No       | `test`                            |
+| `test_file_postfix`       | Postfix of the test files to run (e.g. notification.rego <> notification_test.rego)                                                                                                                                   | No       | `_test`                           |
+| `write_pr_comment`        | Flag to write a user-friendly PR comment with test results                                                                                                                                                            | No       | `true`                            |
+| `pr_comment_title`        | Title of the PR comment for test results                                                                                                                                                                              | No       | `🧪 OPA Rego Policy Test Results` |
+| `pr_comment_mode`         | Mode that will be used to update comment. Options of upsert (update in place) or recreate.                                                                                                                            | No       | `upsert`                          |
+| `run_coverage_report`     | Flag to run OPA coverage tests and include in PR comment                                                                                                                                                              | No       | `true`                            |
+| `report_untested_files`   | Check & report Rego files without corresponding test files                                                                                                                                                            | No       | `false`                           |
+| `opa_version`             | Version of the OPA CLI to use.                                                                                                                                                                                        | No       | `1.4.2`                           |
+| `opa_static`              | Whether to use the static binary for OPA installation. use.                                                                                                                                                           | No       | `false`                           |
+| `indicate_source_message` | Flag to comment the origins watermark (this repository) of the GitHub Action in the PR comment.                                                                                                                       | No       | `true`                            |
 
 ### Outputs
 
@@ -121,11 +124,14 @@ On each pull request, there is a GitHub Actions workflow that runs the tests aut
 
 ## 🏗️ Setup & Run Locally
 
-You can use [nektos/act](https://github.com/nektos/act) to simulate and run a GitHub Actions workflow locally. To directly test the custom TypeScript action locally, you can:
+You can use [nektos/act](https://github.com/nektos/act) to simulate and run a GitHub Actions workflow locally.
+
+To directly test the custom TypeScript action locally, you can:
 
 1. `npm run install`
 2. `node ./dist/index.js`
    This is assuming you have `npm` and `node` installed already. Note: You will have to manually provide the required inputs since this is directly executing the TypeScript code.
+   Additionally, if you are using VS Code, you can use the `.vscode/launch.json` (which executes `npx ts-node ./src/index.ts`) to run and attach the debugger.
 
 ## 📦 Releases / Packaging for Distribution
 

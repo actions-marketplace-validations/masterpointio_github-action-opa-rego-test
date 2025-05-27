@@ -8,17 +8,20 @@ branding:
 
 inputs:
   path:
-    description: "Path to the directory containing OPA Rego files to test. Default to root directory."
+    description: "Path to the directory containing OPA Rego files to test."
+    required: true
+  test_mode:
+    description: Whether to test the Rego by an entire directory (including entire package, e.g. `opa test ./`) or by individual files (e.g. `opa test a_test.rego a.rego`). Options of `directory` or `file`. Default is `directory`.
     required: false
-    default: "."
+    default: directory
   test_file_postfix:
-    description: 'The postfix to use for test files. E.g. notification.rego <> notification_test.rego. Default is "_test".'
+    description: 'The postfix to use for test files, only applicable for testing file by file. E.g. notification.rego <> notification_test.rego. Default is "_test".'
     required: false
     default: "_test"
   write_pr_comment:
     description: "Flag to write an user friendly PR comment of the test results. Default of true."
     required: false
-    default: true
+    default: "true"
   pr_comment_title:
     description: "Title of the PR comment of the test results."
     required: false
@@ -29,23 +32,23 @@ inputs:
   run_coverage_report:
     description: "Flag to run OPA coverage tests and write to the PR. The `write_pr_comment` must be enabled for the coverage report to be written. Default of true."
     required: false
-    default: true
+    default: "true"
   report_untested_files:
     description: "Check & report in the PR comments of the Rego files that do not have any corresponding test files. For best conventions, append the postfix `_test` (or what you set as the `test_file_postfix` input) for your test file. E.g. `notification.rego` <> `notification_test.rego`"
     required: false
-    default: false
+    default: "false"
   opa_version:
-    description: "Version of OPA CLI to use. Default is 0.67.1."
+    description: "Version of OPA CLI to use. Default is 1.4.2, latest as of 2025-05-15."
     required: false
-    default: "0.67.1"
+    default: "1.4.2"
   opa_static:
     description: "Whether to use the static binary. Default is false."
     required: false
-    default: false
+    default: "false"
   indicate_source_message:
-    description: Flag to comment the origins watermark (this repository) of the GitHub Action in the PR comment. Default of true.
+    description: Flag to comment the origins (this repository) of the GitHub Action in the PR comment. Default of true.
     required: false
-    default: true
+    default: "true"
 outputs:
   parsed_results:
     description: The parsed results after processing the tests and/or coverage report.
@@ -62,41 +65,6 @@ runs:
       with:
         version: ${{ inputs.opa_version }}
         static: ${{ inputs.opa_static }}
-
-    - name: Run OPA Tests and Coverage
-      id: opa-test-coverage
-      shell: bash
-      run: |
-        BASE_DIRECTORY_PATH="${{ inputs.path }}"
-        tests=$(find "$BASE_DIRECTORY_PATH" -type f -name "*${{ inputs.test_file_postfix }}.rego")
-        test_output=""
-        coverage_output=""
-        for test in $tests; do
-            echo "Running test and coverage: $test"
-            base_name=$(basename "$test" "${{ inputs.test_file_postfix }}.rego")
-            test_dir=$(dirname "$test")
-            impl_file=$(find "$test_dir" "$test_dir/.." -maxdepth 1 -type f -name "${base_name}.rego" | head -n1)
-            if [ -n "$impl_file" ]; then
-                echo "Found implementation file: $impl_file"
-                test_result=$(opa test -v "$test" "$impl_file" || true)
-                coverage_result=$(opa test --coverage "$test" "$impl_file" || true)
-                test_output+="$test_result"$'\n\n'
-                coverage_output+="$coverage_result"$'\n\n'
-            else
-                echo "Error: Implementation file not found for test: $test"
-                error_message="Error: Implementation file not found for test: $test"$'\n\n'
-                test_output+="$error_message"
-                coverage_output+="$error_message"
-            fi
-        done
-        echo "$test_output"
-        echo "$coverage_output"
-        echo "test_result<<EOF" >> $GITHUB_OUTPUT
-        echo "$test_output" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
-        echo "coverage_result<<EOF" >> $GITHUB_OUTPUT
-        echo "$coverage_output" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Find Rego files without tests
       if: inputs.report_untested_files == 'true'
@@ -124,27 +92,28 @@ runs:
         echo "Search complete, found the following Rego files without tests: $no_test_files"
 
     # Parse and format the test results which will be consumed by the following step to comment on the PR.
-    - name: "Parse & Format Results from Tests"
+    - name: "Execute and Parse Results from Tests"
       id: parse-results
       run: node ${{ github.action_path }}/dist/index.js
       shell: bash
       env:
-        test_result: ${{ steps.opa-test-coverage.outputs.test_result }}
-        coverage_result: ${{ steps.opa-test-coverage.outputs.coverage_result }}
+        test_mode: ${{ inputs.test_mode }}
         report_untested_files: ${{ inputs.report_untested_files }}
         no_test_files: ${{ steps.find-no-test.outputs.no_test_files }}
         pr_comment_title: ${{ inputs.pr_comment_title }}
         run_coverage_report: ${{ inputs.run_coverage_report }}
         indicate_source_message: ${{ inputs.indicate_source_message }}
+        path: ${{ inputs.path }}
+        test_file_postfix: ${{ inputs.test_file_postfix }}
 
     # Create (or update in-place) a PR comment of the test result output
     - name: Comment on PR
-      uses: thollander/actions-comment-pull-request@fabd468d3a1a0b97feee5f6b9e499eab0dd903f6 # v2.5.0
+      uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b # v3.0.1
       # If `write_pr_comment` enabled, regardless of if test is success or fail, write the results of the failure.
       # Even if input is bool, it has to be treated as string bc of GH's behavior (https://github.com/actions/runner/issues/1483)
       if: inputs.write_pr_comment == 'true' && (success() || failure())
       with:
         message: |
           ${{ steps.parse-results.outputs.parsed_results }}
-        comment_tag: opa-test-results
+        comment-tag: opa-test-results-${{ github.action }} # using the action name as the tag as it is unique, and in case multiple executions of the action are in the same PR
         mode: ${{ inputs.pr_comment_mode }}

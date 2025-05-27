@@ -1,246 +1,144 @@
 import {
-  parseTestOutput,
-  parseCoverageOutput,
-  formatResults,
-  TestResult,
-  CoverageResult,
-} from "../src/index";
+  ProcessedTestResult,
+  ProcessedCoverageResult,
+} from "../src/interfaces";
+import {
+  mockProcessedTestResults,
+  mockProcessedCoverageResults,
+} from "./mockResults";
+import {
+  processTestResults,
+  processCoverageReport,
+} from "../src/testResultProcessing";
+import { formatResults } from "../src/formatResults";
 
 import * as path from "path";
 import * as fs from "fs";
 
-const testOutput = fs.readFileSync(
+// Obtained by running `opa test ./spacelift_policies --format=json --v0-compatible`
+export const testOutput = fs.readFileSync(
   path.join(__dirname, "sample_test_output.txt"),
   "utf8",
 );
-const coverageOutput = fs.readFileSync(
+
+export const coverageOutput = fs.readFileSync(
   path.join(__dirname, "sample_coverage_output.txt"),
   "utf8",
 );
 
-const failedTestOutput = fs.readFileSync(
-  path.join(__dirname, "sample_test_success_fail_mixed.txt"),
-  "utf8",
-);
-
-const multipleUncoveredLinesOutput = fs.readFileSync(
+export const multipleUncoveredLinesOutput = fs.readFileSync(
   path.join(__dirname, "sample_coverage_multiple_uncovered_lines.txt"),
   "utf8",
 );
 
-describe("parseTestOutput", () => {
+describe("processTestResults", () => {
   it("should correctly parse test output", () => {
-    const result = parseTestOutput(testOutput);
+    const result = processTestResults(JSON.parse(testOutput));
     expect(result).toHaveLength(8);
 
     expect(result[0]).toEqual({
-      file: "./examples/tests/ignore-changes-outside-root_test.rego",
+      file: "tests/cancel-in-progress-runs_test.rego",
       status: "PASS",
-      passed: 12,
-      total: 12,
+      passed: 2,
+      total: 2,
       details: expect.arrayContaining([
-        "✅ data.spacelift.test_affected_no_files",
-        "✅ data.spacelift.test_affected_tf_files",
+        "✅ test_cancel_runs_allowed",
+        "✅ test_cancel_runs_denied",
       ]),
     });
   });
 
   it("should handle empty input", () => {
-    const result = parseTestOutput("");
-    expect(result).toEqual([]);
-  });
-
-  it("should handle input with no test results", () => {
-    const result = parseTestOutput("Some random text without any test results");
+    const result = processTestResults([]);
     expect(result).toEqual([]);
   });
 
   it("should correctly parse failed tests", () => {
-    const result = parseTestOutput(failedTestOutput);
-    expect(result).toHaveLength(3);
-    expect(result[0]).toEqual({
-      file: "./opa-policies-with-different-postfix/approval-outside-working-hours.test.rego",
-      status: "FAIL",
-      passed: 6,
-      total: 7,
-      details: [
-        "✅ data.spacelift.test_automatic_approve_weekday_morning",
-        "✅ data.spacelift.test_required_approval_weekday_evening",
-        "❌ data.spacelift.test_missing_approval_weekday_evening",
-        "✅ data.spacelift.test_required_approval_weekend",
-        "✅ data.spacelift.test_missing_approval_weekend",
-        "✅ data.spacelift.test_rejection_due_to_review",
-        "✅ data.spacelift.test_no_rejection_when_no_review",
-      ],
-    });
-  });
-
-  it("should correctly parse mixed test results from different files", () => {
-    const result = parseTestOutput(failedTestOutput);
-    expect(result).toHaveLength(3);
-
-    expect(result[0]).toEqual({
-      file: "./opa-policies-with-different-postfix/approval-outside-working-hours.test.rego",
-      status: "FAIL",
-      passed: 6,
-      total: 7,
-      details: [
-        "✅ data.spacelift.test_automatic_approve_weekday_morning",
-        "✅ data.spacelift.test_required_approval_weekday_evening",
-        "❌ data.spacelift.test_missing_approval_weekday_evening",
-        "✅ data.spacelift.test_required_approval_weekend",
-        "✅ data.spacelift.test_missing_approval_weekend",
-        "✅ data.spacelift.test_rejection_due_to_review",
-        "✅ data.spacelift.test_no_rejection_when_no_review",
-      ],
-    });
-
-    expect(result[1]).toEqual({
-      file: "./opa-policies-with-different-postfix/notification-failure.test.rego",
-      status: "PASS",
-      passed: 1,
-      total: 1,
-      details: ["✅ data.spacelift_test.test_run_failed_with_reject"],
-    });
-
+    const result = processTestResults(JSON.parse(testOutput));
     expect(result[2]).toEqual({
-      file: "./opa-policies-with-different-postfix/enforce-password-length.test.rego",
-      status: "PASS",
-      passed: 1,
-      total: 1,
+      file: "tests/enforce-module-use-policy_test.rego",
+      status: "FAIL",
+      passed: 3,
+      total: 4,
       details: [
-        "✅ data.spacelift.test_allow_creation_of_password_longer_than_20_characters",
+        "✅ test_deny_creation_of_controlled_resource_type",
+        "✅ test_deny_update_of_controlled_resource_type",
+        "❌ test_allow_deletion_of_controlled_resource_type",
+        "✅ test_allow_creation_of_uncontrolled_resource_type",
       ],
     });
   });
 });
 
-describe("parseCoverageOutput", () => {
-  it("should correctly parse coverage output", () => {
-    const result = parseCoverageOutput(coverageOutput);
+describe("processCoverageReport", () => {
+  const parsedCoverageResults = processCoverageReport(
+    JSON.parse(coverageOutput),
+  );
 
-    // Test for ignore-changes-outside-root.rego
-    expect(result[0]).toEqual({
-      file: "./examples/tests/../ignore-changes-outside-root.rego",
-      coverage: 92.85714285714286,
-      notCoveredLines: "40",
-    });
-
-    // Test for ignore-changes-outside-root_test.rego
-    // THIS IS NOT THE OUTPUT USED!
-    expect(result[1]).toEqual({
-      file: "./examples/tests/ignore-changes-outside-root_test.rego",
-      coverage: 97.43589743589743,
-      notCoveredLines: "",
-    });
-
-    // Test for track-using-labels.rego
-    expect(result[2]).toEqual({
-      file: "./examples/tests/../track-using-labels.rego",
-      coverage: 45.45454545454545,
-      notCoveredLines: "3, 5, 12-13, 23-26, 35, 37-38, 41",
-    });
-
-    // Test for track-using-labels_test.rego
-    // THIS IS NOT THE OUTPUT USED!
-    expect(result[3]).toEqual({
-      file: "./examples/tests/track-using-labels_test.rego",
-      coverage: 76.47058823529412,
-      notCoveredLines: "",
-    });
-
-    // Test for enforce-password-length.rego
-    expect(result[4]).toEqual({
-      file: "./examples/tests/../enforce-password-length.rego",
-      coverage: 90.9090909090909,
-      notCoveredLines: "29",
-    });
-
-    // Test for enforce-password-length_test.rego
-    // THIS IS NOT THE OUTPUT USED!
-    expect(result[5]).toEqual({
-      file: "./examples/tests/enforce-password-length_test.rego",
-      coverage: 94.11764705882354,
-      notCoveredLines: "",
-    });
-
-    // Test for notification-stack-failure-origins.rego
-    expect(result[6]).toEqual({
-      file: "./examples/tests/../notification-stack-failure-origins.rego",
-      coverage: 96.66666666666667,
-      notCoveredLines: "80",
-    });
-
-    // Test for notification-stack-failure-origins_test.rego
-    // THIS IS NOT THE OUTPUT USED!
-    expect(result[7]).toEqual({
-      file: "./examples/tests/notification-stack-failure-origins_test.rego",
-      coverage: 98.46153846153847,
-      notCoveredLines: "",
-    });
-  });
-
-  it("should handle empty input", () => {
-    const result = parseCoverageOutput("");
-    expect(result).toEqual([]);
-  });
-
-  it("should handle input with no coverage data", () => {
-    const result = parseCoverageOutput('{"files":{}}');
-    expect(result).toEqual([]);
-  });
-
-  it("should correctly parse multiple not covered ranges", () => {
-    const result = parseCoverageOutput(multipleUncoveredLinesOutput);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      file: "./examples/test.rego",
-      coverage: 80,
-      notCoveredLines: "10-12, 15",
-    });
-  });
-
-  it("should correctly handle files with a single uncovered line", () => {
-    const result = parseCoverageOutput(coverageOutput);
-    const singleUncoveredLineFile = result.find(
-      (r) => r.file === "./examples/tests/../cancel-in-progress-runs.rego",
+  it("should correctly parse coverage output - singular not covered lines", () => {
+    const targetFile = "cancel-in-progress-runs.rego";
+    const result = parsedCoverageResults.find(
+      (item) => item.file === targetFile,
     );
-    expect(singleUncoveredLineFile).toBeDefined();
-    expect(singleUncoveredLineFile?.notCoveredLines).toBe("16");
+
+    expect(result).toBeDefined();
+    expect(result!.coverage).toBeCloseTo(83.33);
+    expect(result!.notCoveredLines).toBe("16");
   });
 
-  it("should correctly handle files with multiple uncovered single line ranges", () => {
-    const result = parseCoverageOutput(coverageOutput);
-    const multipleUncoveredRangesFile = result.find(
-      (r) => r.file === "./examples/tests/../readers-writers-admins-teams.rego",
+  it("should correctly parse coverage output - multiple, hyphenated not covered lines", () => {
+    const targetFile = "enforce-module-use-policy.rego";
+    const result = parsedCoverageResults.find(
+      (item) => item.file === targetFile,
     );
-    expect(multipleUncoveredRangesFile).toBeDefined();
-    expect(multipleUncoveredRangesFile?.notCoveredLines).toBe("16, 24, 28");
+
+    expect(result).toBeDefined();
+    expect(result!.coverage).toBeCloseTo(47.826);
+    expect(result!.notCoveredLines).toBe(
+      "37, 42, 46, 52, 54, 57, 60-61, 64, 68, 78, 80",
+    );
   });
 
-  it("should handle files with 'Coverage test failed' message", () => {
-    const failedCoverageOutput = `
-      Coverage test failed for ./examples/failed_coverage_test.rego
-      {
-        "files": {}
-      }
-    `;
-    const result = parseCoverageOutput(failedCoverageOutput);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      file: "./examples/failed_coverage_test.rego",
-      coverage: 0,
-      notCoveredLines: "N/A",
-    });
+  it("should correctly parse coverage output - multiple, comma-separated not covered lines", () => {
+    const targetFile = "readers-writers-admins-teams.rego";
+    const result = parsedCoverageResults.find(
+      (item) => item.file === targetFile,
+    );
+
+    expect(result).toBeDefined();
+    expect(result!.coverage).toBeCloseTo(83.33);
+    expect(result!.notCoveredLines).toBe("16, 24, 28");
+  });
+
+  it("should correctly parse coverage output - undefined coverage", () => {
+    const targetFile = "drift-detection.rego";
+    const result = parsedCoverageResults.find(
+      (item) => item.file === targetFile,
+    );
+
+    expect(result).toBeDefined();
+    expect(result!.coverage).toBeUndefined();
+    expect(result!.notCoveredLines).toBe("3, 5, 8, 11");
+  });
+
+  it("should correctly parse coverage output - 100% coverage with empty not covered lines", () => {
+    const targetFile = "tests/cancel-in-progress-runs_test.rego";
+    const result = parsedCoverageResults.find(
+      (item) => item.file === targetFile,
+    );
+
+    expect(result).toBeDefined();
+    expect(result!.coverage).toBe(100);
+    expect(result!.notCoveredLines).toBe("");
   });
 });
 
 describe("formatResults", () => {
-  const parsedTestResults = parseTestOutput(testOutput);
-  const parsedCoverageResults = parseCoverageOutput(coverageOutput);
+  const parsedTestResults = mockProcessedTestResults;
+  const parsedCoverageResults = mockProcessedCoverageResults;
 
   it("should correctly format results with coverage", () => {
-    const testResults: TestResult[] = [
+    const testResults: ProcessedTestResult[] = [
       {
         file: "./examples/tests/ignore-changes-outside-root_test.rego",
         status: "PASS",
@@ -249,13 +147,17 @@ describe("formatResults", () => {
         details: ["✅ test1", "✅ test2", "✅ test3"],
       },
     ];
-    const result = formatResults(testResults, parsedCoverageResults, true);
+    const specificCoverageResult = parsedCoverageResults.filter(
+      (res) => res.file === "tests/ignore-changes-outside-root.rego",
+    );
+
+    const result = formatResults(testResults, specificCoverageResult, true);
     expect(result).toContain("# 🧪 OPA Rego Policy Test Results");
     expect(result).toContain(
       "| File | Status | Passed | Total | Coverage | Details |",
     );
     expect(result).toContain(
-      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 92.86% <details><summary>Uncovered Lines</summary>40</details>",
+      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 97.44% | <details><summary>Show Details</summary>✅ test1<br>✅ test2<br>✅ test3</details> |",
     );
     expect(result).toContain(
       "<details><summary>Show Details</summary>✅ test1<br>✅ test2<br>✅ test3</details>",
@@ -263,7 +165,7 @@ describe("formatResults", () => {
   });
 
   it("should correctly format results without coverage and failed", () => {
-    const testResults: TestResult[] = [
+    const testResults: ProcessedTestResult[] = [
       {
         file: "./examples/tests/ignore-changes-outside-root_test.rego",
         status: "FAIL",
@@ -282,30 +184,27 @@ describe("formatResults", () => {
 
   it("should handle all test statuses and coverage scenarios from parsed results", () => {
     const result = formatResults(
-      parsedTestResults,
-      parsedCoverageResults,
+      mockProcessedTestResults,
+      mockProcessedCoverageResults,
       true,
     );
 
     expect(result).toContain(
-      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 92.86% <details><summary>Uncovered Lines</summary>40</details>",
+      "| tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 97.44% | <details><summary>Show Details</summary>✅ test1<br>✅ test2<br>✅ test3<br>✅ test4<br>✅ test5<br>✅ test6<br>✅ test7<br>✅ test8<br>✅ test9<br>✅ test10<br>✅ test11<br>✅ test12</details> |",
     );
 
     expect(result).toContain(
-      "| ./examples/tests/track-using-labels_test.rego | ✅ PASS | 8 | 8 | 45.45% <details><summary>Uncovered Lines</summary>3, 5, 12-13, 23-26, 35, 37-38, 41</details>",
+      "| tests/track-using-labels_test.rego | ✅ PASS | 8 | 8 | 76.47% | <details><summary>Show Details</summary>✅ test_label_match<br>✅ test_label_no_match<br>✅ test_no_labels_on_resource<br>✅ test_no_labels_on_constraint<br>✅ test_empty_labels_on_resource<br>✅ test_empty_labels_on_constraint<br>✅ test_multiple_labels_match<br>✅ test_multiple_labels_no_match</details> |",
     );
 
-    // Test for a file with multiple uncovered line ranges
     expect(result).toContain(
-      "| ./examples/tests/readers-writers-admins-teams_test.rego | ✅ PASS | 6 | 6 | 83.33% <details><summary>Uncovered Lines</summary>16, 24, 28</details>",
+      "| tests/readers-writers-admins-teams_test.rego | ✅ PASS | 6 | 6 | 83.33% <details><summary>Uncovered Lines</summary>16, 24, 28</details> | <details><summary>Show Details</summary>✅ test_reader_access<br>✅ test_writer_access<br>✅ test_admin_access<br>✅ test_no_access<br>✅ test_multiple_roles<br>✅ test_nested_teams</details> |",
     );
 
-    // Test for a file with a single uncovered line
     expect(result).toContain(
-      "| ./examples/tests/cancel-in-progress-runs_test.rego | ✅ PASS | 2 | 2 | 83.33% <details><summary>Uncovered Lines</summary>16</details>",
+      "| tests/cancel-in-progress-runs_test.rego | ✅ PASS | 2 | 2 | 83.33% <details><summary>Uncovered Lines</summary>16</details> | <details><summary>Show Details</summary>✅ test_cancel_successful<br>✅ test_cancel_failure</details> |",
     );
 
-    // Verify all files from the test output are present
     const fileNames = [
       "ignore-changes-outside-root_test.rego",
       "track-using-labels_test.rego",
@@ -318,14 +217,15 @@ describe("formatResults", () => {
     ];
 
     fileNames.forEach((fileName) => {
-      expect(result).toContain(fileName);
+      expect(result).toContain(`tests/${fileName}`);
     });
 
-    // Verify the total number of result rows matches the number of parsed test results
     const resultRows = result
       .split("\n")
       .filter((line) => line.startsWith("|") && line.includes("PASS"));
-    expect(resultRows.length).toBe(parsedTestResults.length);
+    expect(resultRows.length).toBe(
+      parsedTestResults.filter((r) => r.status === "PASS").length,
+    );
   });
 
   it("should format results without coverage when showCoverage is false", () => {
@@ -337,12 +237,12 @@ describe("formatResults", () => {
     expect(result).not.toContain("Coverage");
     expect(result).toContain("| File | Status | Passed | Total | Details |");
     expect(result).toContain(
-      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 |",
+      "| tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 |",
     );
   });
 
   it("should handle 'NO TESTS' status", () => {
-    const testResults: TestResult[] = [
+    const testResults: ProcessedTestResult[] = [
       {
         file: "./examples/no_test_file.rego",
         status: "NO TESTS",
@@ -358,7 +258,7 @@ describe("formatResults", () => {
   });
 
   it("should correctly match coverage info with test file", () => {
-    const testResults: TestResult[] = [
+    const testResults: ProcessedTestResult[] = [
       {
         file: "./examples/tests/ignore-changes-outside-root_test.rego",
         status: "PASS",
@@ -367,14 +267,17 @@ describe("formatResults", () => {
         details: ["✅ test1", "✅ test2", "✅ test3"],
       },
     ];
-    const result = formatResults(testResults, parsedCoverageResults, true);
+    const specificCoverageResult = parsedCoverageResults.filter(
+      (res) => res.file === "tests/ignore-changes-outside-root.rego",
+    );
+    const result = formatResults(testResults, specificCoverageResult, true);
     expect(result).toContain(
-      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 92.86% <details><summary>Uncovered Lines</summary>40</details>",
+      "| ./examples/tests/ignore-changes-outside-root_test.rego | ✅ PASS | 12 | 12 | 97.44% | <details><summary>Show Details</summary>✅ test1<br>✅ test2<br>✅ test3</details> |",
     );
   });
 
   it("should handle cases where coverage info is not found", () => {
-    const testResults: TestResult[] = [
+    const testResults: ProcessedTestResult[] = [
       {
         file: "./examples/tests/non-existent-file_test.rego",
         status: "PASS",
@@ -385,7 +288,7 @@ describe("formatResults", () => {
     ];
     const result = formatResults(testResults, parsedCoverageResults, true);
     expect(result).toContain(
-      "| ./examples/tests/non-existent-file_test.rego | ✅ PASS | 1 | 1 | N/A ",
+      "| ./examples/tests/non-existent-file_test.rego | ✅ PASS | 1 | 1 | N/A | <details><summary>Show Details</summary>✅ test1</details> |",
     );
   });
 });
