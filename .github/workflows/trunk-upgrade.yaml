@@ -1,0 +1,24 @@
+name: Trunk Upgrade
+
+on:
+  schedule:
+    # On the first day of every month @ 8am
+    - cron: 0 8 1 * *
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  trunk-upgrade:
+    uses: masterpointio/actions/.github/workflows/trunk-upgrade.yaml@7dad35e85d864ca5dda0971dfd3c940cc67ed380 #v0.3.0
+    secrets:
+      MP_BOT_APP_ID: ${{ secrets.MP_BOT_APP_ID }}
+      MP_BOT_APP_PRIVATE_KEY: ${{ secrets.MP_BOT_APP_PRIVATE_KEY }}
+      MASTERPOINT_TEAM_PAT: ${{ secrets.MASTERPOINT_TEAM_PAT }}
+    permissions:
+      contents: write # needed by github-action-trunk-upgrade
+      pull-requests: write # needed by github-action-trunk-upgrade

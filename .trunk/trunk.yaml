@@ -2,18 +2,18 @@
 # To learn more about the format of this file, see https://docs.trunk.io/reference/trunk-yaml
 version: 0.1
 cli:
-  version: 1.24.0
+  version: 1.25.0
 # Trunk provides extensibility via plugins. (https://docs.trunk.io/plugins)
 plugins:
   sources:
     - id: trunk
-      ref: v1.7.0
+      ref: v1.10.2
       uri: https://github.com/trunk-io/plugins
 # Many linters and tools depend on runtimes - configure them here. (https://docs.trunk.io/runtimes)
 runtimes:
   enabled:
     - node@22.16.0
-    - python@3.10.8
+    - python@3.14.4
 # This is the section where you manage your linters. (https://docs.trunk.io/check/configuration)
 lint:
   ignore:
@@ -23,16 +23,29 @@ lint:
         - dist/**
         - .github/pull_request_template.md
   enabled:
-    - actionlint@1.7.7
-    - checkov@3.2.435
+    - actionlint@1.7.12
+    - checkov@3.2.533
     - git-diff-check
-    - markdownlint@0.45.0
-    - osv-scanner@2.0.2
-    - oxipng@9.1.5
-    - prettier@3.5.3
-    - trivy@0.63.0
-    - trufflehog@3.88.35
-    - yamllint@1.37.1
+    - markdownlint@0.48.0
+    - osv-scanner@2.3.8
+    - oxipng@10.1.1
+    - prettier@3.8.4
+    - trivy@0.71.0
+    - trufflehog@3.95.5
+    - yamllint@1.38.0
+    - zizmor@1.25.2
+  definitions:
+    - name: zizmor
+      environment:
+        # Optional token here so that it's not needed locally, but can be used
+        # when trunk is called from our lint workflow in GHA
+        - name: ZIZMOR_GITHUB_TOKEN
+          value: ${env.GITHUB_TOKEN}
+          optional: true
+      commands:
+        # Set to pedantic so that zizmor will run its stale-action-refs audit rule
+        - name: lint
+          run: zizmor --format=sarif --persona=pedantic ${target}
 actions:
   enabled:
     - trunk-announce
